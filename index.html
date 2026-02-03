@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cyber Terminal v1.0</title>
+<style>
+body{
+  margin:0;
+  background:#000;
+  color:#00ff9c;
+  font-family:monospace;
+}
+#terminal{
+  padding:20px;
+  height:60vh;
+  overflow-y:auto;
+}
+input{
+  width:100%;
+  padding:10px;
+  background:black;
+  border:none;
+  color:#00ff9c;
+  font-size:16px;
+}
+.dim{color:#0f766e}
+.warn{color:#facc15}
+.err{color:#ef4444}
+
+#cameraBox{
+  display:none;
+  padding:10px;
+  border-top:1px solid #022;
+  background:#000;
+  flex-wrap:wrap;
+  gap:10px;
+}
+video,canvas{
+  width:240px;
+  border:1px solid #00ff9c;
+}
+#cameraBox{display:flex;}
+</style>
+</head>
+<body>
+
+<div id="terminal"></div>
+<div id="cameraBox">
+  <video id="videoFront" autoplay></video>
+  <video id="videoBack" autoplay></video>
+  <canvas id="canvasFront"></canvas>
+  <canvas id="canvasBack"></canvas>
+</div>
+<input id="cmd" placeholder="login:">
+
+<script>
+const term=document.getElementById("terminal");
+const cmd=document.getElementById("cmd");
+const camBox=document.getElementById("cameraBox");
+
+const videoFront=document.getElementById("videoFront");
+const videoBack=document.getElementById("videoBack");
+const canvasFront=document.getElementById("canvasFront");
+const canvasBack=document.getElementById("canvasBack");
+const ctxF=canvasFront.getContext("2d");
+const ctxB=canvasBack.getContext("2d");
+
+let user=null,start=Date.now();
+let history=[],h=0;
+let streamFront=null, streamBack=null;
+
+// DAFTAR KONTAK
+const contacts = {
+  "dyas": "+62 877-3814-1091",
+  "irza": "+62 856-0050-1545",
+  "ulum": "+62 857-2733-0628",
+  "ipul": "+62 858-0316-5332",
+};
+
+function time(){ return new Date().toLocaleTimeString(); }
+function print(t,c=""){
+  const d=document.createElement("div");
+  d.innerHTML=`[${time()}] <span class="${c}">${t}</span>`;
+  term.appendChild(d);
+  term.scrollTop=term.scrollHeight;
+}
+
+// CAMERA FUNCTIONS
+async function cameraSingle(facing="user"){
+  try{
+    if(facing==="user" && streamFront){ print("Front camera active","warn"); return; }
+    if(facing==="environment" && streamBack){ print("Back camera active","warn"); return; }
+    const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing}});
+    if(facing==="user"){ streamFront=s; videoFront.srcObject=s; }
+    else{ streamBack=s; videoBack.srcObject=s; }
+    camBox.style.display="flex";
+    print(`Camera ${facing==="user"?"front":"back"} activated`,"dim");
+  }catch{
+    print(`Camera ${facing==="user"?"front":"back"} access denied`,"err");
+  }
+}
+
+async function cameraDual(){
+  await cameraSingle("user");
+  await cameraSingle("environment");
+  print("Dual camera activated","dim");
+}
+
+function cameraOff(){
+  if(streamFront){ streamFront.getTracks().forEach(t=>t.stop()); streamFront=null; }
+  if(streamBack){ streamBack.getTracks().forEach(t=>t.stop()); streamBack=null; }
+  camBox.style.display="none";
+  print("All cameras deactivated","dim");
+}
+
+function cameraSnap(){
+  if(streamFront){
+    canvasFront.width=videoFront.videoWidth;
+    canvasFront.height=videoFront.videoHeight;
+    ctxF.drawImage(videoFront,0,0);
+    print("Snapshot front camera captured","dim");
+  }
+  if(streamBack){
+    canvasBack.width=videoBack.videoWidth;
+    canvasBack.height=videoBack.videoHeight;
+    ctxB.drawImage(videoBack,0,0);
+    print("Snapshot back camera captured","dim");
+  }
+}
+
+// CONTACT FUNCTION
+function showContact(name){
+  name = name.toLowerCase();
+  if(!contacts[name]){
+    print("Contact not found","warn");
+    return;
+  }
+  print(`Name: ${name.charAt(0).toUpperCase() + name.slice(1)}`,"dim");
+  print(`Phone: ${contacts[name]}`,"dim");
+}
+
+// OTHER FUNCTIONS
+function progress(msg){
+  const p=document.createElement("div");
+  p.className="progress";
+  const b=document.createElement("div");
+  b.className="bar";
+  p.appendChild(b);
+  term.appendChild(p);
+  let w=0;
+  const i=setInterval(()=>{
+    w+=5;
+    b.style.width=w+"%";
+    if(w>=100){ clearInterval(i); print(msg,"dim"); }
+  },60);
+}
+
+function eyeScan(){
+  print("Initializing eye scan...","dim");
+  setTimeout(()=>{ print("Eye scan complete | Threat level: LOW","warn"); },2000);
+}
+
+// TERMINAL
+print("CYBER TERMINAL v1.0");
+print("Enter username to login","dim");
+
+cmd.addEventListener("keydown",e=>{
+  if(e.key==="ArrowUp"){ h=Math.max(0,h-1); cmd.value=history[h]||""; }
+  if(e.key==="ArrowDown"){ h=Math.min(history.length,h+1); cmd.value=history[h]||""; }
+
+  if(e.key==="Enter"){
+    const v=cmd.value.trim();
+    if(!v)return;
+    history.push(v); h=history.length;
+    print("> "+v); cmd.value="";
+
+    if(!user){
+      user=v;
+      cmd.placeholder=user+"@system>";
+      print(`Welcome ${user}`,"dim");
+      print("Type 'help' for commands","dim");
+      return;
+    }
+
+    // COMMANDS
+    if(v==="help"){
+      print("ai <text> | scan | analyze | phone <name>");
+      print("camera on front/back | camera dual | camera off | camera snap");
+      print("status | uptime | clear | reboot | logout");
+    }
+    else if(v==="camera on front"){ cameraSingle("user"); }
+    else if(v==="camera on back"){ cameraSingle("environment"); }
+    else if(v==="camera dual"){ cameraDual(); }
+    else if(v==="camera off"){ cameraOff(); }
+    else if(v==="camera snap"){ cameraSnap(); }
+    else if(v==="scan"){ eyeScan(); progress("Security scan completed"); }
+    else if(v==="analyze"){ eyeScan(); progress("System analysis complete"); }
+    else if(v.startsWith("phone")){
+      const n=v.split(" ")[1]; 
+      if(!n){ print("Usage: phone <name>","warn"); } else { showContact(n); }
+    }
+    else if(v.startsWith("ai")){
+      const q=v.slice(3).trim();
+      if(!q){ print("Usage: ai <your question>","warn"); return; }
+      print("AI thinking...","dim");
+      fetch("https://api.openai.com/v1/chat/completions",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":"Bearer YOUR_OPENAI_API_KEY"
+        },
+        body:JSON.stringify({
+          model:"gpt-3.5-turbo",
+          messages:[{role:"user",content:q}]
+        })
+      })
+      .then(r=>r.json())
+      .then(d=>{ print("AI: "+d.choices[0].message.content,"dim"); })
+      .catch(()=>print("AI Error","err"));
+    }
+    else if(v==="status"){ print("CPU 41% | RAM 62%","dim"); }
+    else if(v==="uptime"){ print("Uptime: "+Math.floor((Date.now()-start)/1000)+"s","dim"); }
+    else if(v==="clear"){ term.innerHTML=""; }
+    else if(v==="reboot"){ cameraOff(); term.innerHTML=""; user=null; cmd.placeholder="login:"; print("System rebooting...","warn"); }
+    else if(v==="logout"){ cameraOff(); user=null; cmd.placeholder="login:"; print("Logged out","warn"); }
+    else{ print("Unknown command","err"); }
+  }
+});
+</script>
+
+</body>
+</html>
